@@ -357,10 +357,10 @@ def optMDL (df):
             optK=n_cluster
     return optK, minMDL
         
-def binningC (Dict, n):
+def binningC (Dict, n_datapoints):
     
     distribution=[]
-    bins = 10
+    bins = 'sqrt'
     dists=np.zeros(len(Dict))
     index=0
     
@@ -379,26 +379,30 @@ def binningC (Dict, n):
     
     #L(H)= number of bits required to represent the model
     #L(D|H)= number of bits required to represent the predictions of the model
-    probs=[]
-    probs = [i * (1/n) for i in distribution]
-    bits = [-np.log2(i) for i in probs]
     
-    repcost = np.sum(bits)
+    probs = [i * (1/sum(hist)) for i in distribution]
+    repcostc = np.sum(np.multiply(distribution,[-np.log2(i) for i in probs]))
     
-    return repcost
+    heucostc =(-np.log2(len(probs)/bin_edges))*n_datapoints
+    
+    return repcostc, heucostc
 
-def optMDLC (df):
+def optMDLC (df, cutoffvalue):
     
     Z=getDist(df)
     tree = sc.to_tree(Z, rd=True)[1]
-    minMDL=10000
+    minDL=10000
     optK=0
-    n=df.shape[0]
-    totalrepcost=0
+    n_datapoints=df.shape[0]
     monocrit=np.zeros((Z.shape[0],))
+    cutoffvalue=cutoffvalue
+    cutoffpoints=[]
+    
     
     for n_cluster in range(10): #range(df.shape[0]+1)
-        heucost=n_cluster*np.log2(n)+ 10*np.log2(n)    #10 = number of bins(n of Parameters needed for the model)
+        
+        heucost=np.log2(n_cluster)*n_cluster    # log2(K)
+        DL= heucost
         N=fcluster(Z, t=0, criterion='monocrit', monocrit=monocrit)
         L, M = sc.leaders(Z, N)
         leaders = list(L)
@@ -408,15 +412,33 @@ def optMDLC (df):
         for node in tree:
             if node.get_id() in leaders:
                 
-                repcost=binningC(getleafdict(node),n)
-                #if repcost =
-                totalrepcost+=binningC(getleafdict(node), n)    #!!
+                repcostc, heucostc=binningC(getleafdict(node),n_datapoints)
                 
-        desLength=binning(leafDict)
+                DLC = repcostc + heucostc
+            if DLC > cutoffvalue:
+                
+                nodel = node.get_left()
+                noder = node.get_right()
+                
+                repcostcl, heucostcl=binningC(getleafdict(nodel),n_datapoints)
+                repcostcr, heucostcr=binningC(getleafdict(nodel),n_datapoints)
+
+                DLCl = repcostcl + heucostcl
+                DLCr = repcostcr + heucostcr
+                
+                DLC = DLCl + DLCr
+                
+            if DLC <= cutoffvalue:
+                cutoffpoints.append([node.id, DL])
+                DL += DLC
+            else:
+                DLC
+                
+        
         
         
         #if desLength
-        if desLength<minMDL:
-            minMDL=desLength
+        if DL<minDL:
+            minDL=DL
             optK=n_cluster
-    return optK, minMDL
+    return optK, minDL
