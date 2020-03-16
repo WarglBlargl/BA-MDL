@@ -111,79 +111,7 @@ def getDist(df, method='single', metric='euclidean', optimal_ordering=False):
     #cutree= cut_tree(link_df, n_clusters=link_df.shape[0])
     return link
 
-'''def distanceMean(df, n_cluster):
-    
-    data = getDist(dRed(df))
-    affiliation= fcluster(data, t=n_cluster, criterion='maxcluster')
-    # inconsistent returns matrix with columns: mean, std, n_links, inconsistency coefficient
-    mean=inconsistent(data)
-    
-    return mean
-    
-    
-    for i, d in zip(data['icoord'], data['dcoord']):
-        
-        x = 0.5 * sum(i[1:3])
-        y = d[1]
-    '''
-'''
-def getDistDict(df,n_cluster):
-    
-    Z=getDist(dRed(df))
-    N=fcluster(Z,n_cluster, criterion='maxclust')
-    L, M = sc.leaders(Z, N)
-    leaders = list(L)
-    print(leaders)
-    tree = sc.to_tree(Z, rd=True)[1]
-    DictInd = {}
-    for leader in leaders:
-        if leader < df.shape[0]:
-            DictInd[leader] = [0]
-    for node in tree:
-        if node.get_id() in leaders:
-            dist=[node.dist]
-            key = node.get_id()
-            if node.get_count() > 1:
-                dist=getnodesdist(node, dist)
-                DictInd[key] = dist
-            else:
-                DictInd[key] = [0]
-    
-    return DictInd
-'''
-'''
-def getnodesdist(node, dist):
-    lnode= node.get_left()
-    rnode= node.get_right()
-    if lnode.is_leaf() == False:
-         dist.append(lnode.dist)
-         getnodesdist(lnode, dist)
-    if rnode.is_leaf() == False:
-         dist.append(rnode.dist)
-         getnodesdist(rnode, dist)
-    
-    return dist
-'''
-'''def getDistLeaves(df,n_cluster):
-    
-    Z=getDist(dRed(df))
-    N=fcluster(Z,n_cluster, criterion='maxclust')
-    L, M = sc.leaders(Z, N)
-    leaders = list(L)
-    print(leaders)
-    tree = sc.to_tree(Z, rd=True)[1]
-    leafDict={}
 
-    for node in tree:
-        if node.get_id() in leaders:
-            key = node.get_id()
-            if node.get_count() > 1:
-                dist= getleafdict(node)
-            else:
-                dist = {key: 0 }
-            leafDict[key] = dist
-    return leafDict
-'''
 def getleafdict(node):
     """
     Perform pre-order traversal without recursive function calls.
@@ -277,8 +205,7 @@ def binning(Dict):
         #counter += 1
         #ax=fig.add_subplot(1,len(Dict.keys()), counter)
         hist, bin_edges = np.histogram(dists, bins= bins, range=(0,dists.max()))
-        print(bin_edges)
-        print(hist)
+
         n_bins.append(len(bin_edges))
         #n, b, patches= ax.hist(dists, bins=bins, histtype='bar', alpha=1, log=False, density=False)
         for binheight in hist:
@@ -298,7 +225,6 @@ def MDL(distribution, n_bins):
     
     heucost= 0
     print("numberofclusters in clustering: ", n_clusters)
-    print(distribution)
     repcost=0
     #k= number of clusters (choosing one clusterlabel per cluster)
     #P= number of parameters needed to describe the cluster (equal to number of probabilities needed to describe hist)
@@ -310,6 +236,7 @@ def MDL(distribution, n_bins):
         
         n_leaves= sum(c)
         probs = [i * (1/n_leaves) for i in c]
+        
         heucostc = np.log2(n_clusters)+(-np.log2(len(probs)/n_bins[index]))*n_datapoints
         repcostc = np.sum(np.multiply(c,-np.log2(probs)))
         
@@ -333,7 +260,6 @@ def optMDL (df):
         L, M = sc.leaders(Z, N)
         leaders = list(L)
         print(leaders)
-        print(N)
         leafDict={}
     
         for node in tree:
@@ -408,10 +334,10 @@ def optMDLC (df, cutoffvalue):
         leaders = list(L)
         print(leaders)
         leafDict={}
-    
+        
         for node in tree:
             if node.get_id() in leaders:
-                
+                cutoffpoints.append(greedysearch(node, cutoffvalue, n_datapoints))
                 repcostc, heucostc=binningC(getleafdict(node),n_datapoints)
                 
                 DLC = repcostc + heucostc
@@ -442,3 +368,20 @@ def optMDLC (df, cutoffvalue):
             minDL=DL
             optK=n_cluster
     return optK, minDL
+
+def greedysearch(node, cutoffvalue, n_datapoints):
+    
+    repcostc, heucostc=binningC(getleafdict(node),n_datapoints)
+                
+    DLC = repcostc + heucostc
+    
+    if cutoffvalue >= DLC:
+        
+        return [node,DLC]
+    
+    elif cutoffvalue < DLC:
+        
+        greedysearch(node.get_left(),cutoffvalue, n_datapoints)
+        greedysearch(node.get_right(),cutoffvalue, n_datapoints)
+    
+
