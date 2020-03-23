@@ -255,7 +255,7 @@ def optMDL (df):
     optK=0
     desLength=0
     
-    for n_cluster in range(1,11,1): #range(df.shape[0]+1)
+    for n_cluster in range(1,18,1): #range(df.shape[0]+1)
         N=fcluster(Z, n_cluster, criterion='maxclust')
         L, M = sc.leaders(Z, N)
         leaders = list(L)
@@ -294,7 +294,7 @@ def binningC (Dict, n_datapoints):
         dists[index]=np.sum(l_content)
         index+=1
         
-    hist, bin_edges = np.histogram(dists, bins= bins)
+    hist, bin_edges = np.histogram(dists, bins= bins, range=(0,dists.max()))
     
     for binheight in hist:
                 if binheight>0:
@@ -309,79 +309,74 @@ def binningC (Dict, n_datapoints):
     probs = [i * (1/sum(hist)) for i in distribution]
     repcostc = np.sum(np.multiply(distribution,[-np.log2(i) for i in probs]))
     
-    heucostc =(-np.log2(len(probs)/bin_edges))*n_datapoints
-    
-    return repcostc, heucostc
+    heucostc =(-np.log2(len(probs)/len(hist)))*n_datapoints
+    print("probs: ", len(probs),"hist: ", len(hist))
+    print("heucostc: ",heucostc,"probs: ", probs)
+    return repcostc+heucostc
 
 def optMDLC (df, cutoffvalue):
     
-    Z=getDist(df)
-    tree = sc.to_tree(Z, rd=True)[1]
-    minDL=10000
-    optK=0
+    Z=getDist(df)   
     n_datapoints=df.shape[0]
-    monocrit=np.zeros((Z.shape[0],))
-    cutoffvalue=cutoffvalue
-    cutoffpoints=[]
-    
-    
-    for n_cluster in range(10): #range(df.shape[0]+1)
-        
-        heucost=np.log2(n_cluster)*n_cluster    # log2(K)
-        DL= heucost
-        N=fcluster(Z, t=0, criterion='monocrit', monocrit=monocrit)
-        L, M = sc.leaders(Z, N)
-        leaders = list(L)
-        print(leaders)
-        leafDict={}
-        
-        for node in tree:
-            if node.get_id() in leaders:
-                cutoffpoints.append(greedysearch(node, cutoffvalue, n_datapoints))
-                repcostc, heucostc=binningC(getleafdict(node),n_datapoints)
-                
-                DLC = repcostc + heucostc
-            if DLC > cutoffvalue:
-                
-                nodel = node.get_left()
-                noder = node.get_right()
-                
-                repcostcl, heucostcl=binningC(getleafdict(nodel),n_datapoints)
-                repcostcr, heucostcr=binningC(getleafdict(nodel),n_datapoints)
+    n_cluster= 1
+    root = sc.to_tree(Z, rd=False)
+    rootDL = binningC(getleafdict(root),n_datapoints)
+    #monocrit=np.zeros((Z.shape[0],))
+    print("ROOTDL", rootDL)
+    nodelist = [root]
+    dllist = [rootDL]
 
-                DLCl = repcostcl + heucostcl
-                DLCr = repcostcr + heucostcr
-                
-                DLC = DLCl + DLCr
-                
-            if DLC <= cutoffvalue:
-                cutoffpoints.append([node.id, DL])
-                DL += DLC
-            else:
-                DLC
-                
+    
+    while max(dllist) > cutoffvalue:
+        nodeindex = dllist.index(max(dllist))
+        node = nodelist[nodeindex]
+        if node.is_leaf():
+            break
         
-        
-        
-        #if desLength
-        if DL<minDL:
-            minDL=DL
-            optK=n_cluster
-    return optK, minDL
+        nodeDL = binningC(getleafdict(node),n_datapoints)
 
-def greedysearch(node, cutoffvalue, n_datapoints):
-    
-    repcostc, heucostc=binningC(getleafdict(node),n_datapoints)
-                
-    DLC = repcostc + heucostc
-    
-    if cutoffvalue >= DLC:
+        '''clustercost of MDL(H) = np.log2(n_cluster)*n_cluster'''
         
-        return [node,DLC]
-    
-    elif cutoffvalue < DLC:
+        leftDL = binningC(getleafdict(node.get_left()), n_datapoints)
+        rightDL = binningC(getleafdict(node.get_right()),n_datapoints)
         
-        greedysearch(node.get_left(),cutoffvalue, n_datapoints)
-        greedysearch(node.get_right(),cutoffvalue, n_datapoints)
+        print( " \n LEFTDL:", leftDL, "RIGHTDL: ", rightDL, "NODEDL: ", nodeDL)
+        if nodeDL + np.log2(n_cluster)*n_cluster > leftDL + rightDL + np.log2(n_cluster+1)*2:
+        
+            nodelist.append(node.get_left())
+            dllist.append(leftDL)
+            nodelist.append(node.get_right())
+            dllist.append(rightDL)
+            nodelist.remove(node)
+            del dllist[nodeindex]
+            n_cluster += 1
+        else:
+            break
+        print("dllist:  ", dllist, "minDL:  ", sum(dllist))
+    minDL= sum(dllist) + np.log2(n_cluster)*n_cluster
+    
+    return n_cluster, minDL
+
+def greedysearch(node, cutoffvalue, n_datapoints, cutofflist, DLlist):
+    
+    
+    cutofflist=cutofflist
+    DLlist=DLlist
+    DLC=binningC(getleafdict(node),n_datapoints)
+    
+   
+    
+    if DLC < cutoffvalue:
+        
+        cutofflist.append(node)
+        DLlist.append(DLC)
+        
+    if DLC >= cutoffvalue:
+        if not node.get_left().is_leaf():
+            greedysearch(node.get_left(),cutoffvalue, n_datapoints, cutofflist, DLlist)
+        if not node.get_right().is_leaf():
+            greedysearch(node.get_right(),cutoffvalue, n_datapoints, cutofflist, DLlist)
+    
+    return cutofflist, DLlist
     
 
