@@ -242,6 +242,8 @@ def MDL(distribution, n_bins):
         
         heucost += heucostc
         repcost += repcostc
+        print("probs: ", len(probs),"hist: ", n_bins[index], "probs: ", probs)
+
         index +=1
         print("n_leaves in cluster: ", n_leaves, " heucost: " ,heucostc, " repcost: ", repcostc)
     print("total heucost: " ,heucost, " total repcost: ", repcost, " total cost: ", heucost+repcost)
@@ -307,9 +309,9 @@ def binningC (Dict, n_datapoints):
     #L(D|H)= number of bits required to represent the predictions of the model
     
     probs = [i * (1/sum(hist)) for i in distribution]
-    repcostc = np.sum(np.multiply(distribution,[-np.log2(i) for i in probs]))
+    repcostc = np.sum(np.multiply(distribution,-np.log2(probs)))
     
-    heucostc =(-np.log2(len(probs)/len(hist)))*n_datapoints
+    heucostc =(-np.log2(len(probs)/len(bin_edges)))*n_datapoints
     print("probs: ", len(probs),"hist: ", len(hist))
     print("heucostc: ",heucostc,"probs: ", probs)
     return repcostc+heucostc
@@ -341,7 +343,7 @@ def optMDLC (df, cutoffvalue):
         rightDL = binningC(getleafdict(node.get_right()),n_datapoints)
         
         print( " \n LEFTDL:", leftDL, "RIGHTDL: ", rightDL, "NODEDL: ", nodeDL)
-        if nodeDL + np.log2(n_cluster)*n_cluster > leftDL + rightDL + np.log2(n_cluster+1)*2:
+        if (nodeDL + np.log2(n_cluster)*n_cluster)*(1+(1/n_cluster)) > leftDL + rightDL + np.log2(n_cluster+1)*2:
         
             nodelist.append(node.get_left())
             dllist.append(leftDL)
@@ -351,8 +353,10 @@ def optMDLC (df, cutoffvalue):
             del dllist[nodeindex]
             n_cluster += 1
         else:
+            print("nodedl < children : " , nodeDL, leftDL , rightDL, "dllist:  ", dllist, "minDL:  ", sum(dllist))
+            print(n_datapoints, n_cluster)
             break
-        print("dllist:  ", dllist, "minDL:  ", sum(dllist))
+            
     minDL= sum(dllist) + np.log2(n_cluster)*n_cluster
     
     return n_cluster, minDL
